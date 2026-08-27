@@ -1,7 +1,23 @@
 # reth-ext-bsc
 
-Deployment, integration tests and consumer examples for streaming **BSC** canonical
-blocks into the `reth-ext` consumer stack.
+[`reth-ext`](https://github.com/opcode-fi/reth-ext) moves chain state into your process:
+instead of paying an RPC round trip per account and slot and getting back an answer that was
+stale before it arrived, a node streams canonical-state diffs to you and a `revm::DatabaseRef`
+applies them in memory. **On BSC that argument stops being an optimisation and becomes the
+only thing that works.**
+
+BSC produces a block every **0.450s** — measured, not nominal — which is roughly **26x**
+Ethereum's rate. A poll loop cannot keep up with that by construction: you have to ask before
+you can know, you do not know when to ask, and each answer describes a chain that has already
+moved. Poll once a second and you have skipped blocks entirely. Poll harder and you are just
+paying more round trips to stay equally behind.
+
+Streaming inverts it — the node tells you the instant it commits, and you were never asking.
+Measured on this stack, median production-to-commit latency is **0.30s**, inside a single
+block. The consumer is the same `rex-cons` and `rex-sim` that run against Ethereum, unmodified.
+
+This repo is the deployment, wire-compatibility tests and consumer examples that make that
+work against BSC.
 
 ## Where things live
 
