@@ -16,9 +16,10 @@ async fn main() -> eyre::Result<()> {
         match stream.next().await {
             ExExNotification::ChainCommitted { new } => {
                 let tip = new.tip().number;
+                let first = *new.blocks().keys().next().unwrap_or(&tip);
                 if let Some(previous) = previous_tip {
-                    if tip > previous + 1 {
-                        println!("  gap {previous} -> {tip} ({} blocks)", tip - previous - 1);
+                    if first > previous + 1 {
+                        println!("  gap {previous} -> {first} ({} blocks)", first - previous - 1);
                     }
                 }
                 previous_tip = Some(tip);
