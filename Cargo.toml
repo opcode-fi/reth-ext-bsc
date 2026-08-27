@@ -1,0 +1,22 @@
+[package]
+name = "reth-ext-bsc"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/opcode-fi/reth-ext-bsc"
+description = "Deployment, wire-compatibility tests and consumer examples for the BSC rex stream"
+
+# This crate carries no library of its own. It exists to depend on BOTH `reth-ext` (the
+# Ethereum-typed consumer) and a running BSC producer at the same time, which is something
+# neither of those repos can do.
+[dependencies]
+rex-cons = { git = "https://github.com/opcode-fi/reth-ext", tag = "v0.1.0" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+eyre = "0.6"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
+[[example]]
+name = "subscribe"
+path = "examples/subscribe.rs"

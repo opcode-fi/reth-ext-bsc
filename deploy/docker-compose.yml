@@ -1,0 +1,109 @@
+# BSC node + rex bridge.
+#
+# Every non-obvious value here was set in response to a measured failure, and the reasoning
+# is kept inline because the numbers look arbitrary otherwise. Where a value differs from
+# the Ethereum node we run as the reliability reference, the difference is stated.
+#
+# Build from a checkout of github.com/opcode-fi/reth-bsc:
+#   docker build -t reth-bsc:local /path/to/reth-bsc
+name: reth_bsc
+
+services:
+  reth_bsc:
+    image: reth-bsc:local
+    container_name: reth_bsc
+    restart: unless-stopped
+    user: "1000:1000"
+    # Give MDBX time to finish a write transaction; a hard kill mid-commit is how you get a
+    # corrupt datadir.
+    stop_grace_period: 5m
+
+    # MEMORY. Steady state is 10-23 GB, spiking past 28 while committing canonical blocks.
+    # 34g leaves headroom above the spikes without over-committing a shared host.
+    #
+    # The failure this prevents is subtler than it looks: every kill we saw was a HOST-wide
+    # OOM, not this container hitting its own ceiling. reth-bsc was simply the fattest
+    # process when the box ran out. A limit that is too generous does not protect the host;
+    # it just makes this the process the kernel picks.
+    mem_limit: 34g
+    mem_reservation: 12g
+    # Biases the kernel away from choosing this process. Note this shifts risk onto the next
+    # fattest process rather than removing it -- the real fix is host headroom.
+    oom_score_adj: -500
+
+    # CPU. Unbounded, this node drove load to 323 on a 128-core box and fell off the tip,
+    # which is the trigger behind both failure modes we root-caused. cpu_shares (default
+    # 1024) raises its scheduling weight so contention does not push it behind.
+    cpus: "24"
+    cpu_shares: 4096
+
+    ports:
+      - "30313:30313/tcp"
+      - "30313:30313/udp"
+      - "127.0.0.1:8565:8545"     # RPC   (8545 is the Ethereum node's)
+      - "127.0.0.1:8566:8546"     # WS
+      - "127.0.0.1:6060:6060"     # metrics
+      - "127.0.0.1:10001:10000"   # rex   (10000 is the Ethereum node's)
+
+    volumes:
+      - ${BSC_DATADIR:-/data/timescale/reth-bsc}:/data
+
+    command:
+      - "node"
+      - "--chain=bsc"
+      - "--datadir=/data"
+
+      # TEMPORARY, and it should be removed once there is a quiet window for it.
+      #
+      # This disables the consensus check that would have caught a state-root divergence in
+      # minutes rather than hours -- and the Ethereum node runs without it. But turning it on
+      # requires reth to first rebuild intermediate trie nodes that were never maintained
+      # while it was set: a full walk of ~749 GB of state (293M storage leaves). That rebuild
+      # was measured to exceed both 28 GB and 36 GB, OOMing twice, so the node cannot make
+      # progress with it on.
+      #
+      # A node at tip without the alarm beats a node that cannot sync. TO REMOVE: schedule
+      # the rebuild with >36 GB of headroom, once.
+      - "--engine.skip-state-root-validation"
+
+      # Defaults to 4096 MB. The Ethereum node carries that default safely because at 12s
+      # blocks it never does a five-minute catch-up; BSC's ~26x block rate puts the same
+      # cache alongside far more in-flight execution state. 1024 trades hit-rate for ~3 GB
+      # of headroom, which decided whether the container fit its limit.
+      - "--engine.cross-block-cache-size=1024"
+
+      - "--port=30313"
+      - "--discovery.port=30313"
+      - "--http"
+      - "--http.addr=0.0.0.0"
+      - "--http.port=8545"
+      - "--http.api=eth,net,web3,txpool,debug"
+      - "--http.corsdomain=*"
+      - "--ws"
+      - "--ws.addr=0.0.0.0"
+      - "--ws.port=8546"
+      - "--ws.origins=*"
+      - "--ws.api=eth,net,web3,txpool,debug"
+      - "--rpc.max-tracing-requests=12"
+      - "--rpc.max-blocking-io-requests=32"
+      - "--rpc-cache.max-concurrent-db-requests=256"
+      - "--rpc.max-connections=64"
+      - "--rpc.pending-block=none"
+      - "--metrics=0.0.0.0:6060"
+      # bsc::block_import is warn because it is extremely chatty at BSC block rates;
+      # bsc::rex is debug so bridge sends can be counted against canonical commits.
+      - "--log.stdout.filter=info,bsc::block_import=warn,bsc::rex=debug"
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -X POST -H 'content-type: application/json' --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_blockNumber\",\"params\":[]}' http://127.0.0.1:8545 || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      # Initial sync is long; a shorter window just marks a healthy node unhealthy.
+      start_period: 30m
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"

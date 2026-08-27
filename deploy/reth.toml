@@ -1,0 +1,56 @@
+# Goes in the datadir as reth.toml.
+#
+# Deliberately minimal. The Ethereum reth node we use as the reliability reference has NO
+# [stages.*] overrides at all and holds tip at 8-15 GB. Everything here is either prune
+# policy or one of the two stage overrides BSC genuinely needs -- both because a reth default
+# was calibrated for 12-second blocks and is wrong at 0.45.
+
+[prune]
+block_interval = 5
+minimum_pruning_distance = 10064
+
+[prune.segments]
+sender_recovery = "full"
+transaction_lookup = "full"
+
+[prune.segments.receipts]
+distance = 64
+
+[prune.segments.account_history]
+distance = 10064
+
+[prune.segments.storage_history]
+distance = 10064
+
+[prune.segments.bodies_history]
+distance = 10064
+
+# Execution buffer.
+#
+# reth defaults: max_duration=10m, max_changes=5_000_000, max_blocks=500_000. At 12s blocks a
+# 10-minute execution window covers ~50 blocks; at BSC's 0.45s it covers ~1,300. Measured
+# growth during catch-up is +8 GB/min above 150 Mgas/s, so a 10-minute window targets an
+# ~80 GB in-RAM buffer. That produced the first round of kernel OOM kills.
+#
+# Bounding max_duration took peak RSS from 33-46 GB to 1.8 GB across a full catch-up.
+[stages.execution]
+max_blocks = 50000
+max_changes = 1000000
+max_cumulative_gas = 500000000000
+max_duration = "1m"
+
+# Merkle incremental threshold.
+#
+# reth's default is 7_000 blocks. Above that gap, MerkleExecute abandons the incremental trie
+# update and does a FULL REBUILD, which is enormously memory-hungry.
+#
+# 7,000 blocks is ~23 HOURS behind on Ethereum -- effectively unreachable in normal operation.
+# On BSC it is ~54 MINUTES. So a BSC node that falls behind for under an hour trips a full
+# rebuild: we observed MerkleExecute pinned at one checkpoint, RSS at 24 GB, the cgroup
+# hitting its ceiling 643 times, and no forward progress.
+#
+# 100_000 blocks is ~13 hours of BSC, restoring the "you will practically never hit this"
+# property that the Ethereum default has.
+[stages.merkle]
+incremental_threshold = 100000
+rebuild_threshold = 100000
