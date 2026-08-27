@@ -23,7 +23,7 @@ services:
     #
     # The failure this prevents is subtler than it looks: every kill we saw was a HOST-wide
     # OOM, not this container hitting its own ceiling. reth-bsc was simply the fattest
-    # process when the box ran out. A limit that is too generous does not protect the host;
+    # process when the host ran out of memory. A limit that is too generous does not protect
     # it just makes this the process the kernel picks.
     mem_limit: 34g
     mem_reservation: 12g
@@ -31,7 +31,7 @@ services:
     # fattest process rather than removing it -- the real fix is host headroom.
     oom_score_adj: -500
 
-    # CPU. Unbounded, this node drove load to 323 on a 128-core box and fell off the tip,
+    # CPU. Unbounded, this node drove load average to ~2.5x the core count and fell off the tip,
     # which is the trigger behind both failure modes we root-caused. cpu_shares (default
     # 1024) raises its scheduling weight so contention does not push it behind.
     cpus: "24"
@@ -46,7 +46,7 @@ services:
       - "127.0.0.1:10001:10000"   # rex   (10000 is the Ethereum node's)
 
     volumes:
-      - ${BSC_DATADIR:-/data/timescale/reth-bsc}:/data
+      - ${BSC_DATADIR:-./data}:/data
 
     command:
       - "node"
