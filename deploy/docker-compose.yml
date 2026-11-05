@@ -17,7 +17,12 @@ services:
     # corrupt datadir.
     stop_grace_period: 5m
 
-    # MEMORY. Raised 34g -> 48g on 2026-11-03 after seven cgroup OOM kills in 24 hours.
+    # MEMORY. Lowered 48g -> 34g on 2026-11-05: host-wide OOMs (constraint=CONSTRAINT_NONE)
+    # returned. The node fell behind, its catch-up grew it to ~47 GB, the host ran out, and a
+    # co-located Ethereum node lost its page cache and stalled for two hours. A kill loop
+    # inside this container's own ceiling (below) is the lesser failure on a shared host.
+    #
+    # Raised 34g -> 48g on 2026-11-03 after seven cgroup OOM kills in 24 hours.
     #
     # Every one was constraint=CONSTRAINT_MEMCG -- its own ceiling, not host pressure -- and
     # the RSS at kill was 32.2-32.5 GB each time, i.e. it reliably wants ~32.4 GB and 34g
@@ -35,7 +40,7 @@ services:
     # OOM, not this container hitting its own ceiling. reth-bsc was simply the fattest
     # process when the host ran out of memory. A limit that is too generous does not protect
     # it just makes this the process the kernel picks.
-    mem_limit: 48g
+    mem_limit: 34g
     mem_reservation: 12g
     # Biases the kernel away from choosing this process. Note this shifts risk onto the next
     # fattest process rather than removing it -- the real fix is host headroom.
