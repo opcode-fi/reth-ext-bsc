@@ -74,6 +74,7 @@ services:
       - "node"
       - "--chain=bsc"
       - "--datadir=/data"
+      - "--db.sync-mode=safe-no-sync"
 
       # TEMPORARY, and it should be removed once there is a quiet window for it.
       #
