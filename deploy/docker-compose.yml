@@ -92,7 +92,8 @@ services:
       # Bound the cross-block cache to 512 MiB. Lower cache capacity can increase state
       # reads and reduce throughput; the capacity reduction is not measured RSS savings.
       - "--engine.cross-block-cache-size=512"
-      - "--engine.persistence-backpressure-threshold=256"
+      - "--engine.persistence-threshold=32"
+      - "--engine.persistence-backpressure-threshold=512"
 
       - "--port=30313"
       - "--discovery.port=30313"
